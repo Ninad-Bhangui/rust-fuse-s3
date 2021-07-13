@@ -2,6 +2,7 @@ use s3::{Region, output::ListObjectsV2Output};
 use std::error::Error;
 
 pub async fn get_objects(bucket: &str) -> Result<ListObjectsV2Output, Box<dyn Error>> {
+    println!("Entered function get_objects");
     let conf = s3::Config::builder()
         .region(Region::new("us-east-2"))
         .build();

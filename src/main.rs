@@ -8,7 +8,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::time::{Duration, UNIX_EPOCH};
 const TTL: Duration = Duration::from_secs(1); // 1 second
-use async_trait::async_trait;
+use futures::executor::block_on;
 
 const HELLO_DIR_ATTR: FileAttr = FileAttr {
     ino: 1,
@@ -123,7 +123,6 @@ impl Filesystem for HelloFS {
 }
 
 struct S3FS;
-#[async_trait]
 impl Filesystem for S3FS {
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         println!("lookup called {:?}", name);
@@ -163,7 +162,8 @@ impl Filesystem for S3FS {
             reply.error(ENOENT);
         }
     }
-    fn readdir(
+    #[tokio::main]
+    async fn readdir(
         &mut self,
         _req: &Request,
         ino: u64,
@@ -172,18 +172,17 @@ impl Filesystem for S3FS {
         mut reply: ReplyDirectory,
     ) {
         println!("readdir called");
-        s3_utils::get_objects("trying-test-bucket");
+        let objects = block_on(s3_utils::get_objects("trying-test-bucket")).unwrap();
+        println!("{:?}",objects);
 
         println!("readdir after");
         if ino != 1 {
             reply.error(ENOENT);
             return;
         }
-
         let entries = vec![
             (1, FileType::Directory, "."),
             (1, FileType::Directory, ".."),
-            (2, FileType::RegularFile, "hello.txt"),
         ];
 
         for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
@@ -192,12 +191,19 @@ impl Filesystem for S3FS {
                 break;
             }
         }
+        for (i, object) in objects.contents.unwrap_or_default().into_iter().enumerate() {
+            let filename = object.key.unwrap();
+            println!("index: {} and name: {}", i,filename);
+            if reply.add(i as u64, (i + 1) as i64, FileType::RegularFile, filename) {
+                break;
+            }
+        }
         reply.ok();
     }
 }
 
-#[tokio::main]
-async fn main() {
+
+fn main() {
     // env_logger::init();
     println!("starting..");
     let mountpoint = env::args_os().nth(1).unwrap();
@@ -210,5 +216,7 @@ async fn main() {
             options.push(MountOption::AutoUnmount);
         }
     }
+    println!("Mountpoint: {:?}", mountpoint);
+    println!("options: {:?}", options);
     fuser::mount2(S3FS, mountpoint, &options).unwrap();
 }

@@ -12,3 +12,4 @@ libc = "0.2.51"
 s3 = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.5-alpha", package = "aws-sdk-s3", path = "../../s3" }
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1.50"
+futures = "0.3.15"
